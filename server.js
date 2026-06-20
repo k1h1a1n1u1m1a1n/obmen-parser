@@ -1,6 +1,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const Parser = require('./src/Parser');
+const log = require('./src/log');
 
 try {
   process.loadEnvFile(path.join(__dirname, '.env'));
@@ -29,30 +30,48 @@ function send(res, code, body) {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  if (url.pathname !== '/rates') return send(res, 404, { error: 'not found' });
-  if (!TOKEN || req.headers.authorization !== `Bearer ${TOKEN}`) return send(res, 401, { error: 'unauthorized' });
+  const ip = req.socket.remoteAddress;
+  log.info(`${req.method} ${url.pathname} from ${ip}`);
 
+  if (url.pathname !== '/rates') {
+    log.warn(`404 ${url.pathname} from ${ip}`);
+    return send(res, 404, { error: 'not found' });
+  }
+  if (!TOKEN || req.headers.authorization !== `Bearer ${TOKEN}`) {
+    log.warn(`401 unauthorized from ${ip}`);
+    return send(res, 401, { error: 'unauthorized' });
+  }
+
+  const started = Date.now();
   try {
     const rates = await parser.parse();
+    log.info(`200 /rates -> ${rates.length} rates in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     return send(res, 200, {
       parsedAt: new Date().toISOString(),
       count: rates.length,
       rates: rates.map((rate) => ({ from: rate.from, to: rate.to, buy: rate.buy.toString() })),
     });
   } catch (err) {
+    log.error(`500 /rates after ${((Date.now() - started) / 1000).toFixed(1)}s:`, err.stack || err.message);
     return send(res, 500, { error: err.message });
   }
 });
+
+if (!TOKEN) log.warn('API_TOKEN is empty — all requests will be rejected with 401');
 
 // A parse takes ~2 min; don't let the server cut the connection mid-response.
 server.requestTimeout = 0;
 server.timeout = 0;
 
-server.listen(PORT, () => console.log(`obmen24-rates-api listening on :${PORT}`));
+server.listen(PORT, () => log.info(`obmen24-rates-api listening on :${PORT}`));
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {
-    await parser.close().catch(() => {});
+    log.info(`${signal} received, shutting down`);
+    await parser.close().catch((err) => log.error('shutdown error:', err.message));
     server.close(() => process.exit(0));
   });
 }
+
+process.on('unhandledRejection', (err) => log.error('unhandledRejection:', err?.stack || err));
+process.on('uncaughtException', (err) => log.error('uncaughtException:', err?.stack || err));

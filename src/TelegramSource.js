@@ -2,6 +2,7 @@ const { TelegramClient } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const { FloodWaitError } = require('telegram/errors');
 const { num, sleep } = require('./utils');
+const log = require('./log');
 
 const FLOOD_RETRIES = 2;
 const MAX_FLOOD_WAIT_S = 30; // longer flood -> skip city (fall back to web) instead of stalling
@@ -52,6 +53,7 @@ class TelegramSource {
     }
     this.client = new TelegramClient(new StringSession(this.session), this.apiId, this.apiHash, { connectionRetries: 3, receiveUpdates: false });
     await this.client.connect();
+    log.info('telegram connected');
   }
 
   // Latest "Оберіть місто" menu message.
@@ -59,6 +61,7 @@ class TelegramSource {
     const msgs = await this.client.getMessages(this.channel, { limit: 15 });
     this.menu = msgs.find((msg) => msg.replyMarkup?.className === 'ReplyInlineMarkup' && /Оберіть місто/i.test(msg.message || ''));
     if (!this.menu) throw new Error('Telegram: "Оберіть місто" menu not found.');
+    log.info(`telegram menu #${this.menu.id}, ${this.menu.buttons.flat().length} cities`);
     return this.menu;
   }
 
@@ -78,11 +81,11 @@ class TelegramSource {
     } catch (err) {
       if (err instanceof FloodWaitError) {
         if (err.seconds <= MAX_FLOOD_WAIT_S && attempt <= FLOOD_RETRIES) {
-          console.error(`[tg] flood wait ${err.seconds}s on "${button}", retrying`);
+          log.warn(`tg flood wait ${err.seconds}s on "${button}", retrying`);
           await sleep((err.seconds + 1) * 1000);
           return this._click(button, attempt + 1);
         }
-        console.error(`[tg] flood wait ${err.seconds}s on "${button}" — skipping`);
+        log.warn(`tg flood wait ${err.seconds}s on "${button}" — skipping`);
       }
       throw err;
     }

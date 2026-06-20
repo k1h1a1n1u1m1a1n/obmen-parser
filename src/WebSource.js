@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const { num, sleep } = require('./utils');
+const log = require('./log');
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36';
 const MAX_RETRIES = 3;
@@ -62,6 +63,7 @@ class WebSource {
     } catch (err) {
       // network error or timeout — retriable
       if (attempt <= MAX_RETRIES) {
+        log.warn(`web ${err.name === 'TimeoutError' ? 'timeout' : err.message} ${url} — retry ${attempt}/${MAX_RETRIES}`);
         await sleep(RETRY_BASE_MS * attempt);
         return this._get(url, attempt + 1);
       }
@@ -71,6 +73,7 @@ class WebSource {
     if (res.ok) return res.text();
     const retriable = res.status === 429 || res.status === 403 || res.status >= 500;
     if (retriable && attempt <= MAX_RETRIES) {
+      log.warn(`web HTTP ${res.status} ${url} — retry ${attempt}/${MAX_RETRIES}`);
       await sleep(RETRY_BASE_MS * attempt);
       return this._get(url, attempt + 1);
     }

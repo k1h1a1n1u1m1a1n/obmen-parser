@@ -3,6 +3,7 @@ const WebSource = require('./WebSource');
 const TelegramSource = require('./TelegramSource');
 const RateBuilder = require('./RateBuilder');
 const { sleep } = require('./utils');
+const log = require('./log');
 
 // Scrapes every city (web + Telegram) and builds BoxExchanger { from, to, buy } pairs.
 class Parser {
@@ -34,8 +35,10 @@ class Parser {
   async _requestCity(city, tgReady) {
     const webReq = this._fetchWeb(city);
     const [web, tg] = await Promise.all([
-      webReq ? webReq.catch(() => null) : null,
-      tgReady && city.tg ? this.telegram.fetchCity(city.tg).catch(() => null) : null,
+      webReq ? webReq.catch((err) => { log.error(`web failed [${city.key}]:`, err.message); return null; }) : null,
+      tgReady && city.tg
+        ? this.telegram.fetchCity(city.tg).catch((err) => { log.error(`tg failed [${city.key}]:`, err.message); return null; })
+        : null,
     ]);
     return { web, tg };
   }
@@ -44,25 +47,37 @@ class Parser {
   parse() {
     if (!this._inflight) {
       this._inflight = this._parse().finally(() => { this._inflight = null; });
+    } else {
+      log.info('parse already in progress — reusing in-flight pass');
     }
     return this._inflight;
   }
 
   async _parse() {
+    const started = Date.now();
+    log.info('parse start');
+
     let tgReady = true;
     try {
       await this.telegram.connect();
       await this.telegram.refreshMenu();
-    } catch {
-      tgReady = false; // degrade to web-only
+    } catch (err) {
+      tgReady = false;
+      log.error('telegram unavailable, degrading to web-only:', err.message);
     }
 
     const rates = [];
+    let failed = 0;
     for (const city of CITIES) {
       const raw = await this._requestCity(city, tgReady);
-      rates.push(...this.builder.build(city, raw));
+      const built = this.builder.build(city, raw);
+      rates.push(...built);
+      if (built.length === 0) failed += 1;
+      log.info(`city ${city.key}: web=${raw.web ? 'ok' : '-'} tg=${raw.tg ? 'ok' : '-'} -> ${built.length} rates`);
       await sleep(this.perCityDelayMs);
     }
+
+    log.info(`parse done: ${rates.length} rates, ${CITIES.length - failed}/${CITIES.length} cities ok, in ${((Date.now() - started) / 1000).toFixed(1)}s`);
     return rates;
   }
 
