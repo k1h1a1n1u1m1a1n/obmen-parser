@@ -4,7 +4,26 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const NAV_TIMEOUT_MS = 60000;
 const TABLE_WAIT_MS = 30000;
 
-// Lazy, persistent headless browser used only as a Cloudflare fallback when plain fetch is 403.
+// Resources the rate page does not need. Scripts/xhr/fetch are kept — Cloudflare's
+// JS challenge relies on them; blocking only saves bandwidth/memory, not the challenge.
+const BLOCKED_RESOURCES = new Set(['image', 'stylesheet', 'font', 'media']);
+
+const LAUNCH_ARGS = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--disable-extensions',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-background-networking',
+  '--disable-default-apps',
+  '--mute-audio',
+  '--disable-blink-features=AutomationControlled',
+  '--blink-settings=imagesEnabled=false',
+];
+
+// Lazy, persistent headless browser used for Cloudflare-fronted web sources.
 // One browser/page reused across cities so the cf_clearance cookie carries over.
 class Browser {
   constructor() {
@@ -23,13 +42,15 @@ class Browser {
 
   async _launch() {
     const puppeteer = require('puppeteer'); // lazy: service runs without it on a whitelisted IP
-    this.browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    });
+    this.browser = await puppeteer.launch({ headless: 'new', args: LAUNCH_ARGS });
     this.page = await this.browser.newPage();
     await this.page.setUserAgent(UA);
-    log.info('headless browser launched (Cloudflare fallback)');
+    await this.page.setRequestInterception(true);
+    this.page.on('request', (req) => {
+      if (BLOCKED_RESOURCES.has(req.resourceType())) req.abort();
+      else req.continue();
+    });
+    log.info('headless browser launched (resources trimmed)');
   }
 
   // Loads url through the browser, waits for the rate table, returns the rendered HTML.
