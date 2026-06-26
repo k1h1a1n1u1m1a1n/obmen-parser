@@ -20,16 +20,25 @@ function parseTable(html) {
 }
 
 // Rates from obmen24-style sites (server-rendered HTML, same rate table, plain fetch).
-// urlFor(slug) -> full page URL.
+// urlFor(slug) -> full page URL. browser (optional) is a Cloudflare fallback used on 403.
 class WebSource {
-  constructor({ urlFor }) {
+  constructor({ urlFor, browser = null }) {
     this.urlFor = urlFor;
+    this.browser = browser;
     this.cookies = new Map();
   }
 
   async fetchCity(slug) {
-    const html = await this._get(this.urlFor(slug));
-    return parseTable(html);
+    const url = this.urlFor(slug);
+    try {
+      return parseTable(await this._get(url));
+    } catch (err) {
+      if (this.browser && /HTTP 403/.test(err.message)) {
+        log.warn(`web 403 ${url} — falling back to headless browser`);
+        return parseTable(await this.browser.getHtml(url));
+      }
+      throw err;
+    }
   }
 
   _headers() {

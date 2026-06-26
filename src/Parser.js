@@ -2,6 +2,7 @@ const CITIES = require('./cities');
 const WebSource = require('./WebSource');
 const TelegramSource = require('./TelegramSource');
 const RateBuilder = require('./RateBuilder');
+const Browser = require('./Browser');
 const { sleep } = require('./utils');
 const log = require('./log');
 
@@ -12,8 +13,9 @@ class Parser {
 
     const webBase = opts.webBaseUrl || 'https://obmen24.com.ua/uk';
     const partnerBase = opts.partnerBaseUrl || 'https://x-change-x.com';
-    this.web = new WebSource({ urlFor: (slug) => `${webBase}/${slug}` });
-    this.partner = new WebSource({ urlFor: (slug) => `${partnerBase}/${slug}/currency-exchange/` });
+    this.browser = new Browser(); // shared Cloudflare fallback (lazy: launches only on first 403)
+    this.web = new WebSource({ urlFor: (slug) => `${webBase}/${slug}`, browser: this.browser });
+    this.partner = new WebSource({ urlFor: (slug) => `${partnerBase}/${slug}/currency-exchange/`, browser: this.browser });
     this.telegram = new TelegramSource({
       apiId: opts.tgApiId,
       apiHash: opts.tgApiHash,
@@ -83,6 +85,7 @@ class Parser {
 
   async close() {
     await this.telegram.disconnect();
+    await this.browser.close();
   }
 }
 

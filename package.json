@@ -10,6 +10,7 @@
   "dependencies": {
     "bignumber.js": "^9.1.2",
     "cheerio": "^1.0.0",
+    "puppeteer": "^24.0.0",
     "telegram": "^2.26.21"
   }
 }
