@@ -19,17 +19,22 @@ function parseTable(html) {
   return rates;
 }
 
-// Rates from obmen24-style sites (server-rendered HTML, same rate table, plain fetch).
-// urlFor(slug) -> full page URL. browser (optional) is a Cloudflare fallback used on 403.
+// Rates from obmen24-style sites (server-rendered HTML, same rate table).
+// urlFor(slug) -> full page URL. browser (optional) is the Cloudflare path.
+// forceBrowser: skip plain fetch and go straight through the browser (datacenter IPs are always 403).
 class WebSource {
-  constructor({ urlFor, browser = null }) {
+  constructor({ urlFor, browser = null, forceBrowser = false }) {
     this.urlFor = urlFor;
     this.browser = browser;
+    this.forceBrowser = forceBrowser;
     this.cookies = new Map();
   }
 
   async fetchCity(slug) {
     const url = this.urlFor(slug);
+    if (this.forceBrowser && this.browser) {
+      return parseTable(await this.browser.getHtml(url));
+    }
     try {
       return parseTable(await this._get(url));
     } catch (err) {

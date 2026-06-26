@@ -21,6 +21,7 @@ const parser = new Parser({
   partnerBaseUrl: process.env.PARTNER_BASE_URL,
   perCityDelayMs: process.env.PER_CITY_DELAY_MS ? Number(process.env.PER_CITY_DELAY_MS) : undefined,
   emitEur: process.env.EMIT_EUR !== 'false',
+  forceBrowser: process.env.WEB_FORCE_BROWSER === 'true',
 });
 
 function send(res, code, body) {

@@ -13,9 +13,10 @@ class Parser {
 
     const webBase = opts.webBaseUrl || 'https://obmen24.com.ua/uk';
     const partnerBase = opts.partnerBaseUrl || 'https://x-change-x.com';
-    this.browser = new Browser(); // shared Cloudflare fallback (lazy: launches only on first 403)
-    this.web = new WebSource({ urlFor: (slug) => `${webBase}/${slug}`, browser: this.browser });
-    this.partner = new WebSource({ urlFor: (slug) => `${partnerBase}/${slug}/currency-exchange/`, browser: this.browser });
+    this.browser = new Browser(); // shared Cloudflare path (lazy: launches on first use)
+    const forceBrowser = opts.forceBrowser === true; // datacenter IP -> skip the always-403 fetch
+    this.web = new WebSource({ urlFor: (slug) => `${webBase}/${slug}`, browser: this.browser, forceBrowser });
+    this.partner = new WebSource({ urlFor: (slug) => `${partnerBase}/${slug}/currency-exchange/`, browser: this.browser, forceBrowser });
     this.telegram = new TelegramSource({
       apiId: opts.tgApiId,
       apiHash: opts.tgApiHash,

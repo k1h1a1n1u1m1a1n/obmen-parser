@@ -59,5 +59,10 @@ concurrent requests share one in-flight parse. A missing source degrades gracefu
 | `PARTNER_BASE_URL` | https://x-change-x.com | |
 | `PER_CITY_DELAY_MS` | 1500 | anti-flood gap between cities |
 | `EMIT_EUR` | true | set `false` to skip EUR/USD |
+| `WEB_FORCE_BROWSER` | false | `true` -> fetch web via headless browser directly (set on datacenter IPs where plain fetch is always Cloudflare-403) |
 
-Run on a host with a clean (non-datacenter/VPN) IP — Cloudflare challenges datacenter IPs.
+## Cloudflare / IP
+
+obmen24 + x-change-x sit behind Cloudflare, which 403-challenges datacenter IPs.
+- Clean IP (or whitelisted): leave `WEB_FORCE_BROWSER` unset — plain fetch works; the browser is only a lazy 403 fallback.
+- Datacenter IP (e.g. a VPS): set `WEB_FORCE_BROWSER=true` so web requests go straight through the headless browser (puppeteer), which solves the JS challenge. Requires Chromium + its system libs on the host.
