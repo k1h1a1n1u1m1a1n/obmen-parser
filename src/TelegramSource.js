@@ -67,7 +67,19 @@ class TelegramSource {
 
   async fetchCity(button) {
     if (!this.menu) await this.refreshMenu();
-    const text = await this._click(button);
+    let text;
+    try {
+      text = await this._click(button);
+    } catch (err) {
+      // Channel reposted the menu mid-pass -> our message id is stale. Refresh and retry once.
+      if (/MESSAGE_ID_INVALID/.test(err.errorMessage || err.message || '')) {
+        log.warn('tg menu changed — refreshing and retrying click');
+        await this.refreshMenu();
+        text = await this._click(button);
+      } else {
+        throw err;
+      }
+    }
     return text ? parseAnswer(text) : null;
   }
 
