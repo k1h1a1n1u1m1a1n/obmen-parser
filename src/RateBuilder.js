@@ -45,19 +45,21 @@ class RateBuilder {
     ];
   }
 
-  // USDT<->USD from bot commissions (standard banknotes). USDT~USD 1:1 minus the spread.
+  // USDT<->USD from bot commissions (standard banknotes). USDT~USD 1:1; office values USDT above cash,
+  // so USDT->USD is a markup (1+%) while USD->USDT is a discount (1-%).
   _usdtPair(commissions, city) {
     const find = (give, take) => commissions.find(
       (comm) => comm.officeGives.currency === give && comm.officeGives.quality === 'standard'
         && comm.clientGives.currency === take && comm.clientGives.quality === 'standard',
     );
-    const spread = (percent) => round6(new BigNumber(1).minus(new BigNumber(percent).div(100)));
+    const markup = (percent) => round6(new BigNumber(1).plus(new BigNumber(percent).div(100)));
+    const discount = (percent) => round6(new BigNumber(1).minus(new BigNumber(percent).div(100)));
 
     const out = [];
     const toUsd = find('USD', 'USDT'); // client gives USDT, gets USD
-    if (toUsd) out.push({ from: this.code('USDT', city), to: this.code('USD', city), buy: spread(toUsd.percent) });
+    if (toUsd) out.push({ from: this.code('USDT', city), to: this.code('USD', city), buy: markup(toUsd.percent) });
     const toUsdt = find('USDT', 'USD'); // client gives USD, gets USDT
-    if (toUsdt) out.push({ from: this.code('USD', city), to: this.code('USDT', city), buy: spread(toUsdt.percent) });
+    if (toUsdt) out.push({ from: this.code('USD', city), to: this.code('USDT', city), buy: discount(toUsdt.percent) });
     return out;
   }
 }
